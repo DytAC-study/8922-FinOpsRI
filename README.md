@@ -1,174 +1,206 @@
-# RI Alerts Demo (CST8922 FinOps Project)
+## 📊 Azure Reserved Instance (RI) Utilization Reporting System
 
-This project demonstrates an automated cost governance alert system for Reserved Instance (RI) underutilization in Microsoft Azure.
+This project automates the process of **retrieving**, **analyzing**, and **reporting** Azure Reserved Instance utilization data. It also sends daily email alerts with utilization summaries and warnings via **Azure Logic App** or **SMTP**.
 
-## Features
+------
 
-- Reads RI usage data via Azure Consumption API (or mock fallback)
-- Identifies underutilized RIs (default threshold: 80%)
-- Summarizes historical RI underuse (UnusedReservation cost)
-- Generates HTML and CSV reports
-- Sends real alert emails via Gmail SMTP
-- Fully runnable in WSL or Ubuntu with Python venv
+### 🔁 Workflow Overview
 
-## Setup
+```mermaid
+flowchart TD
+    A[Fetch RI Data from Azure] --> B[Save to JSON]
+    B --> C[Import into SQLite DB]
+    C --> D[Analyze Utilization]
+    D --> E[Generate HTML + CSV Report]
+    E --> F[Send Email via Logic App / SMTP]
+```
+
+------
+
+### 📂 Folder Structure
+
+```
+pgsqlCopyEditCST8922-FinOps/
+│
+├── data/
+│   ├── azure_ri_usage_summary_YYYY-MM-DD.json   # Raw usage snapshots
+│   ├── ri_utilization_summary_YYYY-MM-DD.json   # Analysis output
+│   └── ri_usage.db                              # SQLite DB for usage tracking
+│
+├── email_reports/
+│   ├── user_at_email_com_YYYY-MM-DD.html        # Email HTML content
+│   └── user_at_email_com_YYYY-MM-DD.csv         # CSV attachment
+│
+├── terraform/                                   # Infra as Code (optional)
+│
+├── query_azure_ri_data.py                       # Collect raw data from Azure
+├── import_to_db.py                              # Import JSON into DB
+├── analyze_ri_utilization.py                    # Perform analysis
+├── send_html_reports.py                         # Email report generation and dispatch
+├── email_utils.py                               # Email sending logic
+├── .env                                         # Environment settings
+└── requirements.txt
+```
+
+------
+
+## 🧾 Step-by-Step Guide
+
+------
+
+### 1️⃣ Collect RI Usage from Azure
+
+**Script**: `query_azure_ri_data.py`
+ **Output**: JSON file named `azure_ri_usage_summary_YYYY-MM-DD.json`
+ **Data structure example**:
+
+```json
+[
+  {
+    "subscription_id": "sub-001",
+    "ri_id": "ri-eastus-001",
+    "sku_name": "Standard_DS1_v2",
+    "region": "eastus",
+    "purchase_date": "2024-12-01",
+    "term_months": 12,
+    "utilization_percent": 22.3,
+    "email_recipient": "cloudops@acme.com"
+  }
+]
+```
+
+⛔ *Note*: Due to student subscription limits, this can also be mocked manually.
+
+------
+
+### 2️⃣ Import JSON into Database
+
+**Script**: `import_to_db.py --all`
+
+- Loads all `azure_ri_usage_summary_*.json` files
+- Avoids duplication (checks date+RI ID)
+- Creates and writes into SQLite DB `data/ri_usage.db`
+
+------
+
+### 3️⃣ Analyze Utilization and Expiry Status
+
+**Script**: `analyze_ri_utilization.py`
+ **Modes**:
+
+- `ANALYSIS_MODE=json` → Reads latest 7 JSON files
+- `ANALYSIS_MODE=db` → Reads last 7 days from database
+
+**Output file**: `ri_utilization_summary_YYYY-MM-DD.json`
+ **Output format**:
+
+```json
+[
+  {
+    "subscription_id": "sub-001",
+    "ri_id": "ri-eastus-001",
+    "sku_name": "Standard_DS1_v2",
+    "region": "eastus",
+    "purchase_date": "2024-12-05",
+    "term_months": 12,
+    "utilization_percent": 22.3,
+    "days_remaining": 185,
+    "status": "underutilized",
+    "expiry_status": "active",
+    "underutilized_days": 7,
+    "unused_days": 0,
+    "missing_days": 0,
+    "email_recipient": "yuntian.du93@gmail.com",
+    "alert": "This RI has been underutilized for 7 consecutive days."
+  }
+]
+```
+
+### ⚠️ Field Descriptions
+
+| Field                 | Description                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| `subscription_id`     | Azure subscription ID                                        |
+| `ri_id`               | Reserved Instance ID                                         |
+| `sku_name`            | The SKU (instance type)                                      |
+| `region`              | Azure region                                                 |
+| `purchase_date`       | Date the RI was purchased                                    |
+| `term_months`         | Term duration of the RI in months                            |
+| `utilization_percent` | Latest usage percentage (over the analysis window)           |
+| `days_remaining`      | Days until the RI expires                                    |
+| `status`              | One of: `healthy`, `underutilized`, `unused`, `missing_data` |
+| `expiry_status`       | One of: `active`, `expiring_soon`, `expired`                 |
+| `underutilized_days`  | Number of consecutive days below the utilization threshold   |
+| `unused_days`         | Number of consecutive days with 0 usage                      |
+| `missing_days`        | Number of days with missing data                             |
+| `email_recipient`     | Recipient to whom the report is sent                         |
+| `alert`               | Warning message generated based on usage trends              |
+
+------
+
+### 4️⃣ Send Emails with HTML + CSV Reports
+
+**Script**: `send_html_reports.py`
+
+- Groups reports by `email_recipient`
+- Generates HTML report and CSV attachment
+- Sends via:
+  - SMTP if `EMAIL_METHOD=smtp`
+  - Logic App if `EMAIL_METHOD=logicapp`
+
+📧 **Email content**:
+
+- Summary table with **color-coded rows**
+- Alert messages like:
+  - ❗ `ri-eastus-002 is unused for 3 days`
+  - ⚠️ `ri-eastus-004 is underutilized for 5 days`
+
+------
+
+## 🛠️ .env Configuration
+
+```
+# Email Settings
+EMAIL_METHOD=logicapp               # logicapp or smtp
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your_username
+SMTP_PASS=your_password
+LOGICAPP_ENDPOINT=https://prod-00...
+
+# Thresholds
+MIN_UTILIZATION_THRESHOLD=60
+EXPIRY_WARNING_DAYS=30
+ANALYSIS_WINDOW_DAYS=7
+ALARM_DAY_THRESHOLD=3
+
+# Default values
+DEFAULT_REGION=eastus
+DEFAULT_SKU=Standard_DS1_v2
+```
+
+------
+
+## 🧪 Quick Start Commands
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+# Create virtualenv
+python -m venv .venv
+.venv\Scripts\activate
+
+# Install packages
 pip install -r requirements.txt
+
+# Simulate pipeline
+python import_to_db.py --all
+python analyze_ri_utilization.py
+python send_html_reports.py
 ```
-
-## Run
-
-Edit `monitor_ri.py` and replace your subscription ID (if using real API):
-
-```python
-subscription_id = "your-subscription-id"
-```
-
-Then run:
-
-```bash
-python monitor_ri.py
-# or
-python summary.py
-```
-
-## Output
-
-- HTML report in `/alerts/`
-- CSV report in `/alerts/`
-- Email alert via Gmail SMTP
-
-## Optional Features
-
-- Replace mock data with real Azure API
-- Use Cost Management billing output
-- Schedule via crontab or Azure Automation
-
-## Authors
-
-Team CST8922 - Azure FinOps Automation
 
 ------
 
-# 📚 Data Model & FinOps Strategy
+## 🧩 Notes
 
-## 🔍 Where Mock Data Comes From
-
-The mock data used in this project is modeled after **real Azure APIs**, specifically:
-
-- **Azure Cost Management API** (`/query/usage`)
-- **Azure Consumption API** (`reservation_usage_details`)
-- **ChargeType == "UnusedReservation"`** represents money spent on Reserved Instances that were not used
-
-We simulate:
-
-- Daily RI usage records with quantity vs reserved quantity (monitor_ri.py)
-- Cost Management billing records, including daily entries for ChargeType = "UnusedReservation" (parse_cost_details.py)
-
-These mirror what you can get in a real production tenant, but allow us to demo logic without requiring actual RIs or enterprise cost access.
-
-------
-
-## 📈 What Azure Really Provides
-
-Using Azure SDK or REST API, you can access:
-
-- **Cost data** by:
-  - Subscription
-  - Resource Group
-  - Service Name
-  - Reservation ID
-  - ChargeType (e.g. OnDemand, UnusedReservation)
-  - Date
-- **RI Usage data** by:
-  - Instance ID
-  - Quantity used
-  - SKU name
-  - Reservation duration
-
-We query and group by these dimensions to simulate daily/monthly behavior.
-
-------
-
-## 💰 How This Helps Save Money
-
-| Feature                 | Purpose                                                    | FinOps Impact                                                |
-| ----------------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
-| `monitor_ri.py`         | Detects low-utilization RIs (based on usage %)             | Prevents future waste by alerting early                      |
-| `parse_cost_details.py` | Summarizes historical RI underuse (UnusedReservation cost) | Quantifies past financial waste to justify RI strategy changes |
-| `summary.py`            | Merges both views                                          | Enables end-to-end visibility for IT + Finance teams         |
-
-
-
-These reports can help:
-
-- **Recommend reallocation** of RIs to other workloads
-- **Trigger exchange/cancellation** actions if available
-- **Inform future purchase decisions** ("Don't buy 1-yr RI for this SKU again")
-
-------
-
-## 📊 Daily vs. Monthly Tracking
-
-| Type         | Tool                  | Insight                                    |
-| ------------ | --------------------- | ------------------------------------------ |
-| Daily usage  | monitor_ri.py         | Identifies real-time inefficiencies        |
-| Monthly cost | parse_cost_details.py | Quantifies financial impact over time      |
-| Combined     | summary.py            | Enables holistic reporting, trend analysis |
-
-
-
-By tracking both **usage metrics** and **cost history**, the FinOps team can correlate technical and financial data to drive smarter cloud cost decisions.
-
-------
-
-# 📬 Email Notifications (Daily & Monthly)
-
-The project includes full email functionality using **Gmail SMTP**, configured via environment variables.
-
-## 🔐 Setup
-
-First, enable 2-step verification on your Google account, and create an App Password.
-
-Then, create a `.env` file in the root folder with:
-
-```
-SMTP_USER=your_gmail_account@gmail.com
-SMTP_PASS=your_app_password_here
-```
-
-Install required packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-## 🔔 Email Types
-
-| Type               | Trigger                 | Purpose                                                      |
-| ------------------ | ----------------------- | ------------------------------------------------------------ |
-| **Daily Alert**    | `monitor_ri.py`         | RI instances with utilization below threshold (default 80%)  |
-| **Monthly Report** | `parse_cost_details.py` | RI usage showing wasted cost from `UnusedReservation` entries |
-
-
-
-## 📩 How to Use
-
-No changes required — both scripts automatically send emails after generating results:
-
-- HTML report is saved to `alerts/`
-- CSV report is saved to `alerts/`
-- Email is sent using Gmail SMTP with subject line and preview
-
-## 💡 Email Functionality
-
-Implemented in `email_utils.py`:
-
-- `send_email(subject, html_body)` — sends a formatted HTML email
-- `send_daily_alert_email(alerts)` — called by `monitor_ri.py`
-- `send_monthly_cost_email(summary)` — called by `parse_cost_details.py`
-
-Fallbacks (if email fails) will print content to the terminal.
+- Compatible with both **real Azure API data** and **mocked JSON files**
+- Easily expandable for cost tracking, chart generation, etc.
+- Supports per-recipient email customization
