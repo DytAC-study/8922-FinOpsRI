@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual environment
+.env
+.venv/
+venv/
+ENV/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Output reports
+email_reports/
+alerts/
+*.html
+*.csv
+*.json
+.terraform/
