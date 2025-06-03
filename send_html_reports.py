@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 from email_utils import send_email
+from collections import defaultdict
 
 load_dotenv()
 
@@ -121,9 +122,19 @@ for recipient, data in grouped.items():
     export_csv(data, csv_file)
     print(f"📧 HTML + CSV report generated for {recipient}: {html_file}, {csv_file}")
 
+    # Region-wise alert count
+    region_alerts = defaultdict(int)
+    for r in data:
+        if r["status"] in ("underutilized", "unused"):
+            region_alerts[r["region"]] += 1
+    total_alerts = sum(region_alerts.values())
+    region_summary = ", ".join(f"{region}: {count}" for region, count in region_alerts.items())
+
+    subject = f"RI Utilization Report – {summary_date} ({total_alerts} alerts: {region_summary})"
+
     send_email(
         recipient=recipient,
-        subject=f"RI Utilization Report – {summary_date}",
+        subject=subject,
         html_body=html_content,
-        attachment=csv_file  # logicapp will handle base64 + name
+        attachment=csv_file  # for logicapp mode, content will be encoded
     )
