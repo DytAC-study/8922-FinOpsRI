@@ -70,7 +70,7 @@ def send_via_logicapp(recipient, subject, html_body, attachment=None):
                 b64content = base64.b64encode(f.read()).decode("utf-8")
             attachments = [{
                 "Name": os.path.basename(attachment),
-                "Content": b64content
+                "ContentBytes": b64content
             }]
             print(f"[📎] Prepared attachment: {attachments[0]['Name']}")
 
