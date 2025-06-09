@@ -1,0 +1,282 @@
+[
+  {
+    "subscription_id": "sub-001",
+    "ri_id": "ri-eastus-001",
+    "sku_name": "Standard_DS1_v2",
+    "region": "eastus",
+    "purchase_date": "2024-11-01",
+    "term_months": 12,
+    "utilization_percent": 22.3,
+    "email_recipient": "yuntian.du93@gmail.com"
+  },
+  {
+    "subscription_id": "sub-001",
+    "ri_id": "ri-eastus-002",
+    "sku_name": "Standard_DS1_v2",
+    "region": "eastus",
+    "purchase_date": "2024-12-05",
+    "term_months": 12,
+    "utilization_percent": 0.0,
+    "email_recipient": "yuntian.du93@gmail.com"
+  },
+  {
+    "subscription_id": "sub-001",
+    "ri_id": "ri-eastus-003",
+    "sku_name": "Standard_DS1_v2",
+    "region": "eastus",
+    "purchase_date": "2024-10-10",
+    "term_months": 12,
+    "utilization_percent": 85.6,
+    "email_recipient": "yuntian.du93@gmail.com"
+  },
+  {
+    "subscription_id": "sub-001",
+    "ri_id": "ri-eastus-004",
+    "sku_name": "SQL_P2",
+    "region": "eastus",
+    "purchase_date": "2025-01-01",
+    "term_months": 12,
+    "utilization_percent": 3.4,
+    "email_recipient": "yuntian.du93@gmail.com"
+  },
+  {
+    "subscription_id": "sub-001",
+    "ri_id": "ri-eastus-005",
+    "sku_name": "AppService_P1",
+    "region": "eastus",
+    "purchase_date": "2024-12-10",
+    "term_months": 12,
+    "utilization_percent": 61.2,
+    "email_recipient": "yuntian.du93@gmail.com"
+  },
+  {
+    "subscription_id": "sub-002",
+    "ri_id": "ri-westus-001",
+    "sku_name": "Standard_DS2_v2",
+    "region": "westus",
+    "purchase_date": "2025-02-01",
+    "term_months": 12,
+    "utilization_percent": 9.9,
+    "email_recipient": "du000086@algonquinlive.com"
+  },
+  {
+    "subscription_id": "sub-002",
+    "ri_id": "ri-westus-002",
+    "sku_name": "Standard_DS2_v2",
+    "region": "westus",
+    "purchase_date": "2025-01-15",
+    "term_months": 12,
+    "utilization_percent": 0.0,
+    "email_recipient": "du000086@algonquinlive.com"
+  },
+  {
+    "subscription_id": "sub-002",
+    "ri_id": "ri-westus-003",
+    "sku_name": "AppService_P2",
+    "region": "westus",
+    "purchase_date": "2024-11-22",
+    "term_months": 12,
+    "utilization_percent": 47.0,
+    "email_recipient": "du000086@algonquinlive.com"
+  },
+  {
+    "subscription_id": "sub-002",
+    "ri_id": "ri-westus-004",
+    "sku_name": "Standard_B1ms",
+    "region": "westus",
+    "purchase_date": "2025-03-10",
+    "term_months": 12,
+    "utilization_percent": 90.5,
+    "email_recipient": "du000086@algonquinlive.com"
+  },
+  {
+    "subscription_id": "sub-002",
+    "ri_id": "ri-westus-005",
+    "sku_name": "SQL_P1",
+    "region": "westus",
+    "purchase_date": "2025-01-25",
+    "term_months": 12,
+    "utilization_percent": 11.8,
+    "email_recipient": "du000086@algonquinlive.com"
+  },
+  {
+    "subscription_id": "sub-003",
+    "ri_id": "ri-north-001",
+    "sku_name": "Standard_DS3_v2",
+    "region": "northeurope",
+    "purchase_date": "2024-12-01",
+    "term_months": 12,
+    "utilization_percent": 55.4,
+    "email_recipient": "cloudops@acme.com"
+  },
+  {
+    "subscription_id": "sub-003",
+    "ri_id": "ri-north-002",
+    "sku_name": "Standard_DS3_v2",
+    "region": "northeurope",
+    "purchase_date": "2024-11-20",
+    "term_months": 12,
+    "utilization_percent": 12.0,
+    "email_recipient": "cloudops@acme.com"
+  },
+  {
+    "subscription_id": "sub-003",
+    "ri_id": "ri-north-003",
+    "sku_name": "AppService_P1",
+    "region": "northeurope",
+    "purchase_date": "2025-01-15",
+    "term_months": 12,
+    "utilization_percent": 0.0,
+    "email_recipient": "cloudops@acme.com"
+  },
+  {
+    "subscription_id": "sub-004",
+    "ri_id": "ri-canada-001",
+    "sku_name": "Standard_B2s",
+    "region": "canadacentral",
+    "purchase_date": "2025-01-01",
+    "term_months": 12,
+    "utilization_percent": 76.3,
+    "email_recipient": "canada-admin@example.com"
+  },
+  {
+    "subscription_id": "sub-004",
+    "ri_id": "ri-canada-002",
+    "sku_name": "SQL_P2",
+    "region": "canadacentral",
+    "purchase_date": "2024-10-10",
+    "term_months": 12,
+    "utilization_percent": 19.1,
+    "email_recipient": "canada-admin@example.com"
+  },
+  {
+    "subscription_id": "sub-004",
+    "ri_id": "ri-canada-003",
+    "sku_name": "AppService_P3",
+    "region": "canadacentral",
+    "purchase_date": "2024-09-01",
+    "term_months": 12,
+    "utilization_percent": 98.0,
+    "email_recipient": "canada-admin@example.com"
+  },
+  {
+    "subscription_id": "sub-005",
+    "ri_id": "ri-japan-001",
+    "sku_name": "Standard_DS1_v2",
+    "region": "japaneast",
+    "purchase_date": "2025-01-20",
+    "term_months": 12,
+    "utilization_percent": 25.0,
+    "email_recipient": "asia-support@example.com"
+  },
+  {
+    "subscription_id": "sub-005",
+    "ri_id": "ri-japan-002",
+    "sku_name": "AppService_P2",
+    "region": "japaneast",
+    "purchase_date": "2025-02-15",
+    "term_months": 12,
+    "utilization_percent": 33.7,
+    "email_recipient": "asia-support@example.com"
+  },
+  {
+    "subscription_id": "sub-005",
+    "ri_id": "ri-japan-003",
+    "sku_name": "SQL_P1",
+    "region": "japaneast",
+    "purchase_date": "2025-03-01",
+    "term_months": 12,
+    "utilization_percent": 0.0,
+    "email_recipient": "asia-support@example.com"
+  },
+  {
+    "subscription_id": "sub-006",
+    "ri_id": "ri-uswest2-001",
+    "sku_name": "Standard_DS2_v2",
+    "region": "westus2",
+    "purchase_date": "2025-01-10",
+    "term_months": 12,
+    "utilization_percent": 45.5,
+    "email_recipient": "us-west@example.com"
+  },
+  {
+    "subscription_id": "sub-006",
+    "ri_id": "ri-uswest2-002",
+    "sku_name": "Standard_DS2_v2",
+    "region": "westus2",
+    "purchase_date": "2025-01-10",
+    "term_months": 12,
+    "utilization_percent": 88.1,
+    "email_recipient": "us-west@example.com"
+  },
+  {
+    "subscription_id": "sub-006",
+    "ri_id": "ri-uswest2-003",
+    "sku_name": "SQL_P1",
+    "region": "westus2",
+    "purchase_date": "2025-01-10",
+    "term_months": 12,
+    "utilization_percent": 58.4,
+    "email_recipient": "us-west@example.com"
+  },
+  {
+    "subscription_id": "sub-007",
+    "ri_id": "ri-eastasia-001",
+    "sku_name": "Standard_DS1_v2",
+    "region": "eastasia",
+    "purchase_date": "2024-11-11",
+    "term_months": 12,
+    "utilization_percent": 2.2,
+    "email_recipient": "hk-team@example.com"
+  },
+  {
+    "subscription_id": "sub-007",
+    "ri_id": "ri-eastasia-002",
+    "sku_name": "AppService_P2",
+    "region": "eastasia",
+    "purchase_date": "2024-10-10",
+    "term_months": 12,
+    "utilization_percent": 36.9,
+    "email_recipient": "hk-team@example.com"
+  },
+  {
+    "subscription_id": "sub-007",
+    "ri_id": "ri-eastasia-003",
+    "sku_name": "AppService_P2",
+    "region": "eastasia",
+    "purchase_date": "2024-10-10",
+    "term_months": 12,
+    "utilization_percent": 95.3,
+    "email_recipient": "hk-team@example.com"
+  },
+  {
+    "subscription_id": "sub-008",
+    "ri_id": "ri-korea-001",
+    "sku_name": "Standard_DS2_v2",
+    "region": "koreacentral",
+    "purchase_date": "2024-11-01",
+    "term_months": 12,
+    "utilization_percent": 5.5,
+    "email_recipient": "kr@example.com"
+  },
+  {
+    "subscription_id": "sub-008",
+    "ri_id": "ri-korea-002",
+    "sku_name": "SQL_P2",
+    "region": "koreacentral",
+    "purchase_date": "2024-12-12",
+    "term_months": 12,
+    "utilization_percent": 70.0,
+    "email_recipient": "kr@example.com"
+  },
+  {
+    "subscription_id": "sub-008",
+    "ri_id": "ri-korea-003",
+    "sku_name": "AppService_P2",
+    "region": "koreacentral",
+    "purchase_date": "2024-12-12",
+    "term_months": 12,
+    "utilization_percent": 0.0,
+    "email_recipient": "kr@example.com"
+  }
+]

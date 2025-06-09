@@ -1,0 +1,88 @@
+{
+  "columns": [
+    {
+      "name": "ResourceGroupName",
+      "type": "Dimension"
+    },
+    {
+      "name": "ServiceName",
+      "type": "Dimension"
+    },
+    {
+      "name": "ChargeType",
+      "type": "Dimension"
+    },
+    {
+      "name": "MeterCategory",
+      "type": "Dimension"
+    },
+    {
+      "name": "ReservationId",
+      "type": "Dimension"
+    },
+    {
+      "name": "PreTaxCost",
+      "type": "Number"
+    },
+    {
+      "name": "UsageDate",
+      "type": "Date"
+    }
+  ],
+  "rows": [
+    [
+      "prod-rg",
+      "Virtual Machines",
+      "UnusedReservation",
+      "Compute Hours",
+      "resv-001",
+      15.23,
+      "2024-05-01"
+    ],
+    [
+      "prod-rg",
+      "Virtual Machines",
+      "OnDemand",
+      "Compute Hours",
+      "",
+      21.0,
+      "2024-05-01"
+    ],
+    [
+      "prod-rg",
+      "App Services",
+      "OnDemand",
+      "App Service",
+      "",
+      10.5,
+      "2024-05-01"
+    ],
+    [
+      "test-rg",
+      "Virtual Machines",
+      "UnusedReservation",
+      "Compute Hours",
+      "resv-002",
+      7.11,
+      "2024-05-02"
+    ],
+    [
+      "test-rg",
+      "Virtual Machines",
+      "UnusedReservation",
+      "Compute Hours",
+      "resv-002",
+      8.45,
+      "2024-05-03"
+    ],
+    [
+      "prod-rg",
+      "Virtual Machines",
+      "UnusedReservation",
+      "Compute Hours",
+      "resv-001",
+      13.89,
+      "2024-05-04"
+    ]
+  ]
+}
