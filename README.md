@@ -20,7 +20,7 @@ flowchart TD
 ### 📂 Folder Structure
 
 ```
-pgsqlCopyEditCST8922-FinOps/
+CST8922-FinOps/
 │
 ├── data/
 │   ├── azure_ri_usage_summary_YYYY-MM-DD.json   # Raw usage snapshots
@@ -185,16 +185,16 @@ DEFAULT_SKU=Standard_DS1_v2
 
 ```bash
 # Create virtualenv
-python -m venv .venv
+python3 -m venv .venv
 .venv\Scripts\activate
 
 # Install packages
 pip install -r requirements.txt
 
 # Simulate pipeline
-python import_to_db.py --all
-python analyze_ri_utilization.py
-python send_html_reports.py
+python3 import_to_db.py --all
+python3 analyze_ri_utilization.py
+python3 send_html_reports.py
 ```
 
 ------
