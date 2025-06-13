@@ -199,6 +199,30 @@ python3 send_html_reports.py
 
 ------
 
+# Start Via Shell script Or Python main.py
+
+## ✅ run_pipeline.sh
+
+
+
+### ✅ Python main.py Usage
+
+```
+bashCopyEdit# Run the full pipeline
+python main.py --mode all
+
+# Only import JSON files to DB
+python main.py --mode import
+
+# Only analyze utilization
+python main.py --mode analyze
+
+# Only send emails (after analysis JSON is ready)
+python main.py --mode send
+```
+
+
+
 ## 🧩 Notes
 
 - Compatible with both **real Azure API data** and **mocked JSON files**
