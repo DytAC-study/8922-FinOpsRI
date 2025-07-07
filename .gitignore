@@ -23,3 +23,19 @@ alerts/
 *.json
 .terraform/
 !data/*.json
+
+# Terraform state
+terraform/*.tfstate
+terraform/*.tfstate.backup
+
+# Terraform working directory
+terraform/.terraform/
+
+# Sensitive variable files
+terraform/*.tfvars
+
+# Optional: plan files
+terraform/*.tfplan
+
+# Optional: Terraform lock file (keep or ignore based on team policy)
+terraform/.terraform.lock.hcl
