@@ -124,6 +124,12 @@ variable "smtp_sender" {
   default     = "no-reply@example.com"
 }
 
+variable "logicapp_endpoint" {
+  description = "HTTP POST endpoint for Azure Logic App for email notifications if email_method is 'logicapp'."
+  type        = string
+  default     = "" # IMPORTANT: You will need to populate this in your terraform.tfvars if using logicapp
+}
+
 # Application Settings Thresholds
 variable "min_utilization_threshold" {
   description = "Minimum utilization percentage for 'healthy' status."

@@ -1,7 +1,8 @@
 azure-functions
-psycopg2-binary
-azure-identity
-azure-storage-blob
-pandas
-xlsxwriter 
-requests
+psycopg2-binary # For PostgreSQL connectivity
+pandas          # For data analysis in analyze_ri_func
+openpyxl        # For Excel file operations (if generating .xlsx)
+xlsxwriter      # For creating Excel files
+requests        # For Logic App email sending
+azure-identity  # For Managed Identity authentication with Azure services (Blob, Key Vault if still used)
+azure-storage-blob # For Blob Storage interactions

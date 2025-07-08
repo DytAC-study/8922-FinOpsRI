@@ -27,21 +27,3 @@ output "key_vault_uri" {
   description = "URI of the deployed Azure Key Vault."
   value       = azurerm_key_vault.main.vault_uri
 }
-
-output "db_connection_string_secret_id" {
-  description = "Key Vault Secret ID for the PostgreSQL Connection String. Use this in your Function App settings."
-  value       = azurerm_key_vault_secret.db_conn_string.id
-  sensitive   = true
-}
-
-output "smtp_host_secret_id" {
-  description = "Key Vault Secret ID for the SMTP Host (if applicable)."
-  value       = var.email_method == "smtp" ? azurerm_key_vault_secret.smtp_host_secret[0].id : "N/A"
-  sensitive   = true
-}
-
-output "logic_app_endpoint_secret_id" {
-  description = "Key Vault Secret ID for the Logic App Endpoint (if applicable). Remember to update its value after Logic App deployment."
-  value       = var.email_method == "logicapp" ? azurerm_key_vault_secret.logicapp_endpoint_secret[0].id : "N/A"
-  sensitive   = true
-}
