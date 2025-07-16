@@ -1,136 +1,84 @@
 import logging
 import json
 import os
-import psycopg2
+import psycopg2 
 import pandas as pd
-import io
-import xlsxwriter
+import io 
 from datetime import datetime, timedelta
-import base64
 import requests
 import azure.functions as func
+import re 
 
-# 导入分析模块中的核心函数
+# Azure Blob Storage imports for direct upload
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
+# Import ResourceExistsError for specific exception handling
+from azure.core.exceptions import ResourceExistsError
+
+# Import the core analysis function
 from .analyze_ri_utilization import analyze_utilization_from_db
 
-def main(msg: func.QueueMessage, outputBlob: func.Out[bytes]):
-    logging.info(f"Python queue trigger function processed message: {msg.get_body().decode('utf-8')}")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# --- New: Define a separate container for archived Excel reports ---
+BLOB_CONTAINER_ARCHIVED_REPORTS = "ri-archived-reports" # 或者您希望的任何其他合适名称
+# ------------------------------------------------------------------
+
+# Main function for the Queue Trigger
+def main(msg: func.QueueMessage): 
+    logger.info(f"Python queue trigger function processed message: {msg.get_body().decode('utf-8')}")
+
+    conn = None 
     try:
         message_data = json.loads(msg.get_body().decode('utf-8'))
         source_blob_name = message_data.get("blob_name", "unknown_source_blob")
-        logging.info(f"Triggered by message from {source_blob_name} data import.")
+        logger.info(f"Triggered by message from {source_blob_name} data import.")
 
-        logging.info("Starting RI utilization analysis...")
+        # ==== Parse report_date from source_blob_name ====
+        report_date_for_analysis = None
+        date_match_for_analysis = re.search(r'(\d{4}-\d{2}-\d{2})', source_blob_name)
+        if date_match_for_analysis:
+            try:
+                report_date_for_analysis = datetime.strptime(date_match_for_analysis.group(1), '%Y-%m-%d').strftime('%Y-%m-%d')
+                logger.info(f"Parsed report_date '{report_date_for_analysis}' for analysis from blob name.")
+            except ValueError:
+                logger.warning(f"Could not parse date from blob name '{source_blob_name}'. Using current date for analysis.")
+                report_date_for_analysis = datetime.now().strftime('%Y-%m-%d')
+        else:
+            logger.warning(f"No date found in blob name '{source_blob_name}'. Using current date for analysis.")
+            report_date_for_analysis = datetime.now().strftime('%Y-%m-%d')
 
-        conn_string = os.environ["DATABASE_CONNECTION_STRING"]
+        # Retrieve environment variables for database connection and analysis thresholds
+        conn_string = os.environ.get("DATABASE_CONNECTION_STRING")
+        if not conn_string:
+            logger.error("DATABASE_CONNECTION_STRING environment variable is not set. Cannot connect to database.")
+            raise ValueError("Database connection string is missing.")
 
-        # 从环境变量获取分析参数，如果未设置则使用默认值
-        min_utilization_threshold = float(os.environ.get("MIN_UTILIZATION_THRESHOLD", "60.0"))
-        expiry_warning_days = int(os.environ.get("EXPIRY_WARNING_DAYS", "30"))
-        # 确保这些参数在您的 Function App 配置中也已设置，或者接受默认值
-        analysis_window_days = int(os.environ.get("ANALYSIS_WINDOW_DAYS", "90"))
-        underutilized_days_threshold = int(os.environ.get("UNDERUTILIZED_DAYS_THRESHOLD", "7"))
-        unused_days_threshold = int(os.environ.get("UNUSED_DAYS_THRESHOLD", "15"))
-        default_region = os.environ.get("DEFAULT_REGION", "unknown")
-        default_sku = os.environ.get("DEFAULT_SKU", "unknown")
+        min_util_threshold = int(os.environ.get("MIN_UTILIZATION_THRESHOLD", "60"))
+        expiry_warn_days = int(os.environ.get("EXPIRY_WARNING_DAYS", "30"))
+        analysis_win_days = int(os.environ.get("ANALYSIS_WINDOW_DAYS", "7"))
+        underutilized_days_threshold = int(os.environ.get("UNDERUTILIZED_DAYS_THRESHOLD", "3"))
+        unused_days_threshold = int(os.environ.get("UNUSED_DAYS_THRESHOLD", "3"))
+        default_region = os.environ.get("DEFAULT_REGION", "eastus")
+        default_sku = os.environ.get("DEFAULT_SKU", "Standard_DS1_v2")
 
-        # 调用 analyze_ri_utilization.py 中的 analyze_utilization_from_db 函数
-        # 这个函数将负责连接数据库、查询 ri_usage 表并进行分析
-        analyzed_results = analyze_utilization_from_db(
-            db_conn_string=conn_string, # 将 conn_string 正确传递给 db_conn_string 参数
-            min_util_threshold=min_utilization_threshold,
-            expiry_warn_days=expiry_warning_days,
-            analysis_win_days=analysis_window_days,
-            underutilized_days_threshold=underutilized_days_threshold,
-            unused_days_threshold=unused_days_threshold,
-            default_region=default_region,
-            default_sku=default_sku
+        logger.info("Starting RI utilization analysis...")
+        results = analyze_utilization_from_db(
+            conn_string, min_util_threshold, expiry_warn_days, analysis_win_days,
+            underutilized_days_threshold, unused_days_threshold, default_region, default_sku,
+            report_date_for_analysis
         )
 
-        # 将分析结果转换为 DataFrame 以便后续生成 Excel 报告
-        df = pd.DataFrame(analyzed_results)
-
-        report_bytes = None
-        report_name = f"RI_Report_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-
-        if not df.empty:
-            output = io.BytesIO()
-            writer = pd.ExcelWriter(output, engine='xlsxwriter')
-
-            # 1. Overall Summary 概览
-            summary_data = df.groupby(['status', 'expiry_status']).size().reset_index(name='count')
-            summary_data.to_excel(writer, sheet_name='Summary', index=False)
-
-            # 2. Detailed RI Report 详细报告
-            detailed_report_cols = [
-                'subscription_id', 'ri_id', 'sku_name', 'region', 'purchase_date',
-                'term_months', 'utilization_percent', 'days_remaining',
-                'status', 'expiry_status', 'underutilized_days', 'unused_days',
-                'alert', 'email_recipient'
-            ]
-            df_detailed = df[detailed_report_cols]
-            df_detailed.to_excel(writer, sheet_name='Detailed RI Report', index=False)
-
-            # 3. Actionable Items - Underutilized 低利用率项
-            df_underutilized = df[df['status'] == 'underutilized'].copy()
-            df_underutilized.to_excel(writer, sheet_name='Underutilized RIs', index=False)
-
-            # 4. Actionable Items - Unused 未使用项
-            df_unused = df[df['status'] == 'unused'].copy()
-            df_unused.to_excel(writer, sheet_name='Unused RIs', index=False)
-
-            writer.close() # 必须关闭 writer 才能将内容保存到 BytesIO
-            report_bytes = output.getvalue()
-            outputBlob.set(report_bytes)
-            logging.info(f"Successfully generated and uploaded RI utilization report: {report_name}")
-
-            # 假设您还有发送邮件的逻辑，可以放在这里，使用 `df` 中的数据
-            # 例如，从这里开始可以调用您的 email_utils 来发送报告邮件
-            # logic_app_endpoint = os.environ.get("LOGICAPP_ENDPOINT")
-            # recipient_email = os.environ.get("RECIPIENT_EMAIL", "your_recipient_email@example.com")
-            # ... (您的邮件发送逻辑) ...
+        if not results:
+            logger.warning("No data found for RI analysis. Skipping report generation and email send.")
             logic_app_endpoint = os.environ.get("LOGICAPP_ENDPOINT")
-            recipient_email = os.environ.get("RECIPIENT_EMAIL", "your_recipient_email@example.com")
-
-            if logic_app_endpoint:
-                try:
-                    # 准备邮件内容，例如：
-                    email_subject = f"FinOps RI Utilization Report - {datetime.now().strftime('%Y-%m-%d')}"
-                    # 这是一个简单的示例，您可以根据需要生成更复杂的 HTML
-                    html_body = f"""
-                    <p>Dear Team,</p>
-                    <p>Please find the attached RI Utilization Report.</p>
-                    <p>Total records analyzed: {len(df)}</p>
-                    <p>Unused RIs: {len(df_unused)}</p>
-                    <p>Underutilized RIs: {len(df_underutilized)}</p>
-                    <p>Best regards,<br>Your FinOps Automation Team</p>
-                    """
-
-                    # 您可能需要将 report_bytes 转换为 base64 编码以作为附件发送
-                    attachment_b64 = base64.b64encode(report_bytes).decode('utf-8')
-                    attachment_filename = report_name
-
-                    requests.post(logic_app_endpoint, json={
-                        "recipient": recipient_email,
-                        "subject": email_subject,
-                        "html": html_body,
-                        "attachments": [{
-                            "Name": attachment_filename,
-                            "ContentBytes": attachment_b64
-                        }]
-                    })
-                    logging.info("Sent email notification with RI report.")
-                except requests.exceptions.RequestException as e:
-                    logging.error(f"Error sending report email via Logic App: {e}")
-            else:
-                logging.warning("LOGICAPP_ENDPOINT environment variable is not set. Skipping email send.")
-
-
-        else:
-            logging.warning("No data found for RI analysis. Skipping report generation and email send.")
-            logic_app_endpoint = os.environ.get("LOGICAPP_ENDPOINT")
-            recipient_email = os.environ.get("RECIPIENT_EMAIL", "your_recipient_email@example.com")
+            
+            # --- FIX for Issue 4: Ensure RECIPIENT_EMAIL is always from environment ---
+            recipient_email = os.environ.get("RECIPIENT_EMAIL") 
+            if not recipient_email:
+                logger.error("RECIPIENT_EMAIL environment variable is not set. Cannot send no-data notification.")
+                return # Cannot send email, return
 
             if logic_app_endpoint:
                 try:
@@ -142,13 +90,89 @@ def main(msg: func.QueueMessage, outputBlob: func.Out[bytes]):
                         "subject": no_data_subject,
                         "html": no_data_html_body
                     })
-                    logging.info("Sent email notification: No data for RI analysis.")
+                    logger.info("Sent email notification: No data for RI analysis.")
                 except requests.exceptions.RequestException as e:
-                    logging.error(f"Error sending no-data notification email: {e}. Response: {response.text if response else 'N/A'}")
+                    logger.error(f"Error sending no-data notification email: {e}.")
             else:
-                logging.warning("LOGICAPP_ENDPOINT environment variable is not set. Skipping no-data email notification.")
+                logger.warning("LOGICAPP_ENDPOINT environment variable is not set. Skipping no-data email notification.")
+            return # Exit if no results to process
 
+        # --- Generate and Upload JSON Summary to ri-analysis-output ---
+        json_summary_filename = f"ri_utilization_summary_{report_date_for_analysis}.json"
+        
+        storage_account_name = os.environ.get("AZURE_STORAGE_ACCOUNT_NAME")
+        if not storage_account_name:
+            logger.error("AZURE_STORAGE_ACCOUNT_NAME is not set. Cannot upload JSON summary.")
+            raise ValueError("Azure Storage Account Name is missing.")
+
+        try:
+            credential = DefaultAzureCredential()
+            blob_service_client = BlobServiceClient(account_url=f"https://{storage_account_name}.blob.core.windows.net", credential=credential)
+            
+            # Container for JSON summaries
+            analysis_output_container_client = blob_service_client.get_container_client("ri-analysis-output")
+            try:
+                analysis_output_container_client.create_container()
+                logger.info(f"Container 'ri-analysis-output' created (if it didn't exist).")
+            except ResourceExistsError: # Catch specific error if container already exists
+                logger.warning(f"Container 'ri-analysis-output' already exists. Skipping creation.")
+            except Exception as e: 
+                logger.warning(f"Failed to ensure container 'ri-analysis-output' exists: {e}. Assuming it exists.")
+
+            json_blob_client = analysis_output_container_client.get_blob_client(json_summary_filename)
+            
+            json_content = json.dumps(results, indent=4) 
+            json_blob_client.upload_blob(json_content.encode('utf-8'), overwrite=True)
+            logger.info(f"Successfully uploaded JSON summary to blob: {json_summary_filename}")
+
+        except Exception as e:
+            logger.error(f"Failed to upload JSON summary {json_summary_filename} to blob storage: {e}")
+            raise 
+
+        # --- Generate and Upload Proper XLSX Report to a DIFFERENT container ---
+        df = pd.DataFrame(results)
+
+        excel_filename = f"finops-ri-report-{report_date_for_analysis}.xlsx"
+
+        excel_output = io.BytesIO()
+
+        with pd.ExcelWriter(excel_output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='RI Utilization Report', index=False)
+
+            workbook = writer.book
+            worksheet = writer.sheets['RI Utilization Report']
+            for i, col in enumerate(df.columns):
+                max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2 
+                worksheet.set_column(i, i, max_len)
+            
+        try:
+            # --- MODIFIED: Handle container creation without exists_ok ---
+            xlsx_archive_container_client = blob_service_client.get_container_client(BLOB_CONTAINER_ARCHIVED_REPORTS)
+            try:
+                xlsx_archive_container_client.create_container()
+                logger.info(f"Container '{BLOB_CONTAINER_ARCHIVED_REPORTS}' created (if it didn't exist).")
+            except ResourceExistsError: # Catch specific error if container already exists
+                logger.warning(f"Container '{BLOB_CONTAINER_ARCHIVED_REPORTS}' already exists. Skipping creation.")
+            except Exception as e: 
+                logger.warning(f"Failed to ensure container '{BLOB_CONTAINER_ARCHIVED_REPORTS}' exists: {e}. Assuming it exists.")
+
+            xlsx_blob_client = xlsx_archive_container_client.get_blob_client(excel_filename)
+            # ----------------------------------------------------------
+
+            xlsx_blob_client.upload_blob(excel_output.getvalue(), overwrite=True)
+            logger.info(f"Successfully uploaded XLSX report to blob: {excel_filename} in container '{BLOB_CONTAINER_ARCHIVED_REPORTS}'")
+
+        except Exception as e:
+            logger.error(f"Failed to upload XLSX report {excel_filename} to blob storage: {e}")
+            raise 
+
+        logger.info(f"RI analysis and report generation completed for {report_date_for_analysis}.")
 
     except Exception as e:
-        logging.error(f"An unhandled error occurred in analyze_ri_func: {e}")
-        raise # 重新抛出异常，以便 Azure Functions 运行时捕获并处理
+        logger.error(f"An unhandled error occurred in analyze_ri_func: {e}")
+        raise 
+
+    finally:
+        if conn:
+            conn.close()
+            logger.info("PostgreSQL connection closed.")

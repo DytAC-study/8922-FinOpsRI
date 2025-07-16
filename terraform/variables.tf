@@ -75,9 +75,9 @@ variable "blob_container_names" {
   description = "List of Azure Blob Storage container names to create."
   type        = list(string)
   default = [
-    "ri-usage-raw",         # For raw RI usage JSONs
-    "ri-analysis-output",   # For processed analysis JSONs
-    "ri-email-reports"      # For generated HTML/CSV email reports
+    "ri-usage-raw",       # For raw RI usage JSONs
+    "ri-analysis-output", # For processed analysis JSONs
+    "ri-email-reports"    # For generated HTML/CSV email reports
   ]
 }
 

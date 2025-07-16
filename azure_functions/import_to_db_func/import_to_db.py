@@ -21,9 +21,13 @@ def create_table(db_conn_string):
             subscription_id TEXT NOT NULL,
             resource_id TEXT NOT NULL,
             usage_quantity REAL,
-            usage_start TEXT NOT NULL, -- Stored as ISO format string for simplicity
+            usage_start TEXT NOT NULL,
             email_recipient TEXT,
-            PRIMARY KEY (subscription_id, resource_id, usage_start)
+            report_date TEXT NOT NULL,
+            sku_name TEXT,          
+            region TEXT,              
+            term_months INTEGER,      
+            PRIMARY KEY (subscription_id, resource_id, report_date)
         );
         """)
         conn.commit()

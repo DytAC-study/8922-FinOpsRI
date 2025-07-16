@@ -2,7 +2,7 @@ import os
 import psycopg2
 import sys
 import time
-import re # Add this import for regex
+import re
 
 # 请在这里直接粘贴您的数据库连接字符串
 # 确保替换 'YourActualStrongPassword!' 为您的真实密码
@@ -27,10 +27,13 @@ def create_table_with_retries(db_conn_string, max_retries=10, initial_delay=5):
                 subscription_id TEXT NOT NULL,
                 resource_id TEXT NOT NULL,
                 usage_quantity REAL,
-                usage_start TEXT NOT NULL, -- RI的购买/生效日期，不再是主键的一部分
+                usage_start TEXT NOT NULL,
                 email_recipient TEXT,
-                report_date TEXT NOT NULL, -- 新增列，记录这条usage数据是哪一天的
-                PRIMARY KEY (subscription_id, resource_id, report_date) -- 新的主键
+                report_date TEXT NOT NULL,
+                sku_name TEXT,       -- 新增列：RI 的 SKU 名称
+                region TEXT,         -- 新增列：RI 所在的区域
+                term_months INTEGER, -- 新增列：RI 的期限（以月为单位）
+                PRIMARY KEY (subscription_id, resource_id, report_date)
             );
             """)
             conn.commit()
@@ -38,13 +41,11 @@ def create_table_with_retries(db_conn_string, max_retries=10, initial_delay=5):
             print("ri_usage table created or already exists successfully.")
             return True # Success
         except psycopg2.OperationalError as e:
-            # This specific error is for connection issues (e.g., firewall, incorrect host)
             print(f"Connection failed: {e}. Retrying in {initial_delay * (2 ** retries)} seconds...")
             retries += 1
             if retries < max_retries:
                 time.sleep(initial_delay * (2 ** (retries - 1))) # Exponential backoff
         except Exception as e:
-            # Other unexpected errors (e.g., syntax error in SQL, permissions)
             print(f"Error creating ri_usage table: {e}", file=sys.stderr)
             sys.exit(1) # Exit immediately for non-connection errors
         finally:
@@ -54,7 +55,6 @@ def create_table_with_retries(db_conn_string, max_retries=10, initial_delay=5):
     return False # Failure after all retries
 
 if __name__ == "__main__":
-    # 检查DB_CONN_STRING是否已正确设置
     if not DB_CONN_STRING or 'YourActualStrongPassword!' in DB_CONN_STRING:
         print("错误：请设置正确的 'DATABASE_CONNECTION_STRING' 环境变量，并替换为您的真实密码。", file=sys.stderr)
         sys.exit(1)

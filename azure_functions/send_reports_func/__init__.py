@@ -4,81 +4,67 @@ import os
 import json
 from datetime import datetime
 from collections import defaultdict
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
+# DefaultAzureCredential and BlobServiceClient are no longer needed here for READING the input blob
+# as the blob trigger provides the input stream directly.
+# However, they are still needed in send_html_reports.py and email_utils.py for writing/reading other blobs.
 
 # Import the reporting module from the same directory
-from . import send_html_reports # Now it's a sibling module
+from . import send_html_reports
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- Environment Variables ---
+# BLOB_STORAGE_ACCOUNT_NAME is still needed in send_html_reports.py and email_utils.py
+# for archiving CSVs and fetching attachments.
 BLOB_STORAGE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+
 # This container holds the JSON output from the analysis function
+# This is now the container that the blobTrigger listens to
 BLOB_CONTAINER_ANALYSIS_OUTPUT = "ri-analysis-output"
+
 # This container will hold the generated HTML/CSV reports before emailing
-BLOB_CONTAINER_EMAIL_REPORTS = "ri-email-reports" 
+BLOB_CONTAINER_EMAIL_REPORTS = "ri-email-reports"
 
-def main(mytimer: func.TimerRequest) -> None:
-    utc_timestamp = datetime.utcnow().isoformat()
-    logger.info(f'[⏰] Python timer trigger function processed a request at {utc_timestamp}')
+def main(inputblob: func.InputStream) -> None:
+    """
+    Azure Function entry point triggered by a new or updated blob in 'ri-analysis-output' container.
+    This function reads the RI utilization summary JSON, generates HTML/CSV reports, and sends emails.
+    """
+    blob_full_path = inputblob.name
+    blob_name_only = os.path.basename(blob_full_path)
 
-    analysis_summary_date = datetime.now().strftime("%Y-%m-%d")
-    latest_summary_blob_name = f"ri_utilization_summary_{analysis_summary_date}.json"
+    logger.info(f'[⏰] Python Blob trigger function processed blob: {blob_full_path}')
 
+    analysis_summary_date = ""
     records = []
-    if not BLOB_STORAGE_ACCOUNT_NAME:
-        logger.error("[❌] AZURE_STORAGE_ACCOUNT_NAME is not set. Cannot read analysis results from Blob.")
-        return
 
     try:
-        credential = DefaultAzureCredential()
-        blob_service_client = BlobServiceClient(
-            account_url=f"https://{BLOB_STORAGE_ACCOUNT_NAME}.blob.core.windows.net", 
-            credential=credential
-        )
-        container_client = blob_service_client.get_container_client(BLOB_CONTAINER_ANALYSIS_OUTPUT)
-        blob_client = container_client.get_blob_client(latest_summary_blob_name)
+        blob_content = inputblob.read().decode('utf-8')
+        records = json.loads(blob_content)
+        logger.info(f"[✅] Successfully loaded {len(records)} records from Blob '{blob_full_path}'.")
 
-        if blob_client.exists():
-            blob_data = blob_client.download_blob().readall()
-            records = json.loads(blob_data)
-            logger.info(f"[📥] Successfully read analysis summary from Blob: {latest_summary_blob_name}")
+        if blob_name_only.startswith("ri_utilization_summary_") and blob_name_only.endswith(".json"):
+            analysis_summary_date = blob_name_only.replace("ri_utilization_summary_", "").replace(".json", "")
+            logger.info(f"Extracted summary date: {analysis_summary_date}")
         else:
-            logger.warning(f"[⚠️] No analysis summary file found in '{BLOB_CONTAINER_ANALYSIS_OUTPUT}' container for today: {latest_summary_blob_name}. Skipping report generation.")
-            # If no analysis file, send a general notification to the default recipient if configured
-            logic_app_endpoint = os.environ.get("LOGICAPP_ENDPOINT")
-            recipient_email = os.environ.get("RECIPIENT_EMAIL") # Use a general recipient for no-data alert
-
-            if logic_app_endpoint and recipient_email:
-                try:
-                    no_data_subject = f"FinOps RI Report - No Data Available - {analysis_summary_date}"
-                    no_data_html_body = "<p>Dear Team,</p><p>The FinOps RI analysis was scheduled, but no analysis data was found in the database/blob for today.</p><p>Best regards,<br>Your FinOps Automation Team</p>"
-                    # Here you could potentially call send_html_reports.email_utils.send_email
-                    # or a dedicated function within send_html_reports for no-data notifications
-                    pass 
-                except Exception as e:
-                    logger.error(f"Error sending no-data notification email: {e}")
-            return # Exit if no records
+            logger.warning(f"Blob name '{blob_name_only}' does not match expected format for date extraction. Using current date.")
+            analysis_summary_date = datetime.now().strftime("%Y-%m-%d")
 
     except Exception as e:
-        logger.error(f"[❌] Error loading latest summary from Blob '{latest_summary_blob_name}': {e}")
-        raise # Re-raise for Function App to log
-
-    if not records:
-        logger.info("[⚠️] No records found for reporting after loading analysis. Exiting.")
+        logger.error(f"[❌] Error processing blob '{blob_full_path}': {e}", exc_info=True)
         return
 
-    # Gather email sending configuration from environment variables
-    email_method = os.environ.get("EMAIL_METHOD", "logicapp") # e.g., 'logicapp' or 'smtp'
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASS")
-    smtp_sender = os.environ.get("SMTP_SENDER", "noreply@example.com")
+    # --- MODIFIED: Removed SMTP related environment variable retrievals ---
+    # email_method is no longer needed as we hardcode to Logic App in email_utils.py
+    # smtp_host, smtp_port, smtp_user, smtp_pass, smtp_sender are removed.
     logicapp_endpoint = os.environ.get("LOGICAPP_ENDPOINT")
     
+    # --- Get general recipient for fallback ---
+    default_recipient = os.environ.get("RECIPIENT_EMAIL")
+    if not default_recipient:
+        logger.error("[❌] RECIPIENT_EMAIL environment variable is not set. Some reports might not be sent to a default recipient.")
+
     # Call the central report generation and sending function
     # Use os.environ["AzureWebJobsStorage"] for the storage connection string
     # This is a standard environment variable provided by Azure Functions.
@@ -87,13 +73,8 @@ def main(mytimer: func.TimerRequest) -> None:
         summary_date=analysis_summary_date,
         storage_conn_string=os.environ["AzureWebJobsStorage"], 
         email_reports_container=BLOB_CONTAINER_EMAIL_REPORTS,
-        email_method=email_method,
-        smtp_host=smtp_host,
-        smtp_port=smtp_port,
-        smtp_user=smtp_user,
-        smtp_pass=smtp_pass,
-        smtp_sender=smtp_sender,
-        logicapp_endpoint=logicapp_endpoint
+        # --- MODIFIED: Only pass Logic App specific parameters ---
+        logicapp_endpoint=logicapp_endpoint,
+        default_recipient=default_recipient
     )
-
-    logger.info(f"[✅] Report Sending Function completed successfully.")
+    logger.info(f"[✅] Python Blob trigger function completed for blob: {blob_full_path}")

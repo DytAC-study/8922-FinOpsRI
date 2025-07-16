@@ -100,21 +100,21 @@ resource "azurerm_linux_function_app" "main" {
   }
 
   app_settings = {
-    "FUNCTIONS_WORKER_RUNTIME"        = "python"
-    "AzureWebJobsStorage"             = azurerm_storage_account.main.primary_connection_string
+    "FUNCTIONS_WORKER_RUNTIME"            = "python"
+    "AzureWebJobsStorage"                 = azurerm_storage_account.main.primary_connection_string
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
-    "APPINSIGHTS_INSTRUMENTATIONKEY"  = azurerm_application_insights.main.instrumentation_key
+    "APPINSIGHTS_INSTRUMENTATIONKEY"      = azurerm_application_insights.main.instrumentation_key
 
     # Direct DB connection string - NO LONGER using Key Vault secret for this
     "DATABASE_CONNECTION_STRING" = "Host=${azurerm_postgresql_flexible_server.main.name}.postgres.database.azure.com;Database=${azurerm_postgresql_flexible_server_database.main.name};Username=${var.postgresql_admin_username};Password=${var.postgresql_admin_password};SslMode=Require;"
 
     "EMAIL_METHOD" = var.email_method
     # Direct SMTP settings - NO LONGER using Key Vault secrets for these
-    "SMTP_HOST"    = var.email_method == "smtp" ? var.smtp_host : null
-    "SMTP_PORT"    = var.smtp_port
-    "SMTP_USER"    = var.email_method == "smtp" ? var.smtp_user : null
-    "SMTP_PASS"    = var.email_method == "smtp" ? var.smtp_pass : null
-    "SMTP_SENDER"  = var.smtp_sender
+    "SMTP_HOST"   = var.email_method == "smtp" ? var.smtp_host : null
+    "SMTP_PORT"   = var.smtp_port
+    "SMTP_USER"   = var.email_method == "smtp" ? var.smtp_user : null
+    "SMTP_PASS"   = var.email_method == "smtp" ? var.smtp_pass : null
+    "SMTP_SENDER" = var.smtp_sender
 
     # Direct Logic App endpoint - NO LONGER using Key Vault secret for this
     "LOGICAPP_ENDPOINT" = var.email_method == "logicapp" ? var.logicapp_endpoint : null
@@ -134,13 +134,13 @@ resource "azurerm_linux_function_app" "main" {
 
 # Azure Database for PostgreSQL Flexible Server
 resource "azurerm_postgresql_flexible_server" "main" {
-  name                        = "${local.name_prefix}-pgsql-${local.suffix}"
-  resource_group_name         = azurerm_resource_group.main.name
-  location                    = azurerm_resource_group.main.location
-  version                     = "13"
-  sku_name                    = var.postgresql_sku_name
-  storage_mb                  = var.postgresql_storage_mb
-  delegated_subnet_id         = null
+  name                          = "${local.name_prefix}-pgsql-${local.suffix}"
+  resource_group_name           = azurerm_resource_group.main.name
+  location                      = azurerm_resource_group.main.location
+  version                       = "13"
+  sku_name                      = var.postgresql_sku_name
+  storage_mb                    = var.postgresql_storage_mb
+  delegated_subnet_id           = null
   public_network_access_enabled = true
 
   administrator_login    = var.postgresql_admin_username
@@ -221,9 +221,9 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_service
 }
 
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_specific_ips" {
-  for_each           = toset(var.allowed_ip_addresses)
-  name               = "AllowIP-${replace(each.key, ".", "-")}"
-  server_id          = azurerm_postgresql_flexible_server.main.id
+  for_each         = toset(var.allowed_ip_addresses)
+  name             = "AllowIP-${replace(each.key, ".", "-")}"
+  server_id        = azurerm_postgresql_flexible_server.main.id
   start_ip_address = each.key
   end_ip_address   = each.key
 }
@@ -241,10 +241,10 @@ resource "azurerm_key_vault" "main" {
   soft_delete_retention_days  = 7     # Increase in production
 
   access_policy {
-    tenant_id        = data.azurerm_client_config.current.tenant_id
-    object_id        = data.azurerm_client_config.current.object_id
-    key_permissions  = []
-    secret_permissions = ["Get", "List", "Set", "Delete"] # Allow setting/getting secrets
+    tenant_id               = data.azurerm_client_config.current.tenant_id
+    object_id               = data.azurerm_client_config.current.object_id
+    key_permissions         = []
+    secret_permissions      = ["Get", "List", "Set", "Delete"] # Allow setting/getting secrets
     certificate_permissions = []
   }
 

@@ -6,3 +6,7 @@ xlsxwriter      # For creating Excel files
 requests        # For Logic App email sending
 azure-identity  # For Managed Identity authentication with Azure services (Blob, Key Vault if still used)
 azure-storage-blob # For Blob Storage interactions
+Werkzeug<3.0.0,>=2.0.0 # Add this line to resolve the dependency conflict
+azure-mgmt-resource # Required for Azure Resource Management operations
+azure-mgmt-subscription # Required for Azure Subscription Management
+azure-mgmt-consumption # Required for Azure Consumption data

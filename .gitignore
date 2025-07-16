@@ -4,32 +4,70 @@ __pycache__/
 *.pyo
 *.pyd
 *.log
+# If you use Poetry or other dependency managers
+.python-version
+.mypy_cache/
+.pytest_cache/
 
 # Virtual environment
-.env
-.venv/
-venv/
-ENV/
+.env    
+.venv/ 
+venv/    
+ENV/     
+
+# Azure Functions specific files
+local.settings.json 
+.funcignore      
+# If you have any Azure Functions build artifacts (less common for Python in-proc)
+# .azurefunctions/
 
 # Secrets
 *.pem
 *.key
+# If you have specific secret files not covered by .env or local.settings.json
+# credentials.json # Example for Google Cloud or other API keys
 
-# Output reports
-email_reports/
-alerts/
-*.html
-*.csv
-*.json
+# Output reports and data
+# If 'data' is where *raw* input data resides, but 'ri_utilization_summary_*.json' is *generated output*
+# Then `!data/*.json` might be tricky.
+# My recommendation:
+# If 'data/' is for input files: Add all *generated* JSONs to ignore.
+# If 'data/' is for *generated* summaries: Ignore the folder unless you specifically want to track generated summaries.
+
+# Let's assume 'data' folder itself might contain some source/static data,
+# but the summary JSONs within it are *generated outputs*.
+# This line is okay if you only want to explicitly NOT ignore JSON files in the 'data' directory.
+# However, if 'data/' primarily contains *generated* files, you might just ignore the whole folder.
+# For now, let's keep it as you have it, as it seems to explicitly allow `data/*.json` to be tracked.
+# Consider if these JSON summaries are truly source code or generated results.
+# If they are generated, they generally shouldn't be committed.
+# If `ri_utilization_summary_*.json` are meant to be *tracked* for historical purposes, then `!data/*.json` is correct.
+data/ri_utilization_summary_*.json
+# OR if 'data' is purely for generated output:
+# data/             # Ignore the entire data output directory
+
+email_reports/ 
+# `alerts/` might be a local directory where you store alert-related info or logs. If generated, ignore.
+# If it's a code directory, don't ignore.
+alerts/     
+
+*.html     
+*.csv        
+*.json        
+
+# Example if you want to track host.json/function.json but ignore other JSONs:
+# !host.json
+# !function.json
+
+
+# Terraform
 .terraform/
-!data/*.json
+# The following two lines are slightly redundant with `.terraform/` but explicitly good for clarity.
+# .terraform/ is typically sufficient for ignoring the contents.
+terraform/.terraform/
 
-# Terraform state
 terraform/*.tfstate
 terraform/*.tfstate.backup
-
-# Terraform working directory
-terraform/.terraform/
 
 # Sensitive variable files
 terraform/*.tfvars
@@ -38,4 +76,15 @@ terraform/*.tfvars
 terraform/*.tfplan
 
 # Optional: Terraform lock file (keep or ignore based on team policy)
-terraform/.terraform.lock.hcl
+# .terraform.lock.hcl is usually specific to your local Terraform version and should generally be ignored for collaboration.
+# If you have a specific reason to track exact provider versions, you might keep it.
+.terraform.lock.hcl
+# Terraform plan files
+tfplan
+
+__azurite_db*
+__blobstorage__*
+__queuestorage__*
+__tablestorage__*
+.azurite/
+AzuriteConfig
