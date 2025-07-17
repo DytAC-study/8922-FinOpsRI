@@ -4,77 +4,67 @@ import os
 import json
 from datetime import datetime
 from collections import defaultdict
-# DefaultAzureCredential and BlobServiceClient are no longer needed here for READING the input blob
-# as the blob trigger provides the input stream directly.
-# However, they are still needed in send_html_reports.py and email_utils.py for writing/reading other blobs.
 
-# Import the reporting module from the same directory
 from . import send_html_reports
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- Environment Variables ---
-# BLOB_STORAGE_ACCOUNT_NAME is still needed in send_html_reports.py and email_utils.py
-# for archiving CSVs and fetching attachments.
 BLOB_STORAGE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
 
-# This container holds the JSON output from the analysis function
-# This is now the container that the blobTrigger listens to
 BLOB_CONTAINER_ANALYSIS_OUTPUT = "ri-analysis-output"
-
-# This container will hold the generated HTML/CSV reports before emailing
 BLOB_CONTAINER_EMAIL_REPORTS = "ri-email-reports"
 
+# --- MODIFIED: Removed 'name' from function signature ---
 def main(inputblob: func.InputStream) -> None:
     """
     Azure Function entry point triggered by a new or updated blob in 'ri-analysis-output' container.
     This function reads the RI utilization summary JSON, generates HTML/CSV reports, and sends emails.
     """
-    blob_full_path = inputblob.name
-    blob_name_only = os.path.basename(blob_full_path)
-
-    logger.info(f'[⏰] Python Blob trigger function processed blob: {blob_full_path}')
-
-    analysis_summary_date = ""
-    records = []
+    logger.info(f"[⏰] Python Blob trigger function processed blob: {inputblob.name}")
 
     try:
-        blob_content = inputblob.read().decode('utf-8')
-        records = json.loads(blob_content)
-        logger.info(f"[✅] Successfully loaded {len(records)} records from Blob '{blob_full_path}'.")
+        # Read the blob content
+        records = json.loads(inputblob.read().decode('utf-8'))
+        logger.info(f"[✅] Successfully loaded {len(records)} records from Blob '{inputblob.name}'.")
 
-        if blob_name_only.startswith("ri_utilization_summary_") and blob_name_only.endswith(".json"):
-            analysis_summary_date = blob_name_only.replace("ri_utilization_summary_", "").replace(".json", "")
+        # Extract summary date from blob name
+        blob_name_parts = inputblob.name.split('/')
+        file_name = blob_name_parts[-1]
+        
+        # Expect file_name in format like 'ri_utilization_summary_YYYY-MM-DD.json'
+        # Extract date from the file name
+        try:
+            analysis_summary_date_str = file_name.replace("ri_utilization_summary_", "").replace(".json", "")
+            analysis_summary_date = datetime.strptime(analysis_summary_date_str, "%Y-%m-%d").strftime("%Y-%m-%d")
             logger.info(f"Extracted summary date: {analysis_summary_date}")
-        else:
-            logger.warning(f"Blob name '{blob_name_only}' does not match expected format for date extraction. Using current date.")
+        except ValueError:
+            logger.error(f"[❌] Could not parse summary date from blob name: {file_name}. Using current date as fallback.")
             analysis_summary_date = datetime.now().strftime("%Y-%m-%d")
 
+        # --- REMOVED: SMTP and EMAIL_METHOD related environment variable retrievals ---
+        # email_method, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_sender, logicapp_endpoint
+        # 这些参数现在都由 email_utils.py 内部处理或不再需要
+
+        # --- FIX for Issue 4: Get general recipient for fallback ---
+        default_recipient = os.environ.get("RECIPIENT_EMAIL")
+        if not default_recipient:
+            logger.error("[❌] RECIPIENT_EMAIL environment variable is not set. Some reports might not be sent to a default recipient.")
+
+        # Call the central report generation and sending function
+        # 使用 os.environ["AzureWebJobsStorage"] 获取存储连接字符串
+        # 这是一个 Azure Functions 提供的标准环境变量。
+        send_html_reports.generate_and_send_reports(
+            records=records,
+            summary_date=analysis_summary_date,
+            storage_conn_string=os.environ["AzureWebJobsStorage"],
+            email_reports_container=BLOB_CONTAINER_EMAIL_REPORTS,
+            # 移除不再需要的参数
+            default_recipient=default_recipient
+        )
+        logger.info(f"[✅] Executed 'Functions.send_reports_func' successfully for {inputblob.name}")
+
     except Exception as e:
-        logger.error(f"[❌] Error processing blob '{blob_full_path}': {e}", exc_info=True)
-        return
-
-    # --- MODIFIED: Removed SMTP related environment variable retrievals ---
-    # email_method is no longer needed as we hardcode to Logic App in email_utils.py
-    # smtp_host, smtp_port, smtp_user, smtp_pass, smtp_sender are removed.
-    logicapp_endpoint = os.environ.get("LOGICAPP_ENDPOINT")
-    
-    # --- Get general recipient for fallback ---
-    default_recipient = os.environ.get("RECIPIENT_EMAIL")
-    if not default_recipient:
-        logger.error("[❌] RECIPIENT_EMAIL environment variable is not set. Some reports might not be sent to a default recipient.")
-
-    # Call the central report generation and sending function
-    # Use os.environ["AzureWebJobsStorage"] for the storage connection string
-    # This is a standard environment variable provided by Azure Functions.
-    send_html_reports.generate_and_send_reports(
-        records=records,
-        summary_date=analysis_summary_date,
-        storage_conn_string=os.environ["AzureWebJobsStorage"], 
-        email_reports_container=BLOB_CONTAINER_EMAIL_REPORTS,
-        # --- MODIFIED: Only pass Logic App specific parameters ---
-        logicapp_endpoint=logicapp_endpoint,
-        default_recipient=default_recipient
-    )
-    logger.info(f"[✅] Python Blob trigger function completed for blob: {blob_full_path}")
+        logger.error(f"[❌] Executed 'Functions.send_reports_func' (Failed, Id={os.environ.get('WEBSITE_INSTANCE_ID')}, Error='{e}')", exc_info=True)
+        raise # Re-raise the exception for the Azure Functions runtime to capture and log
