@@ -48,7 +48,8 @@ def generate_html_report(data: list, summary_date: str) -> str:
             body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; }}
             h1, h2 {{ color: #0056b3; }}
             table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+            /* General table styles - th, td borders will be applied inline for detailed table */
+            th, td {{ padding: 8px; text-align: left; }}
             th {{ background-color: #f2f2f2; }}
             .alert-critical {{ color: #d9534f; font-weight: bold; }}
             .alert-warning {{ color: #f0ad4e; font-weight: bold; }}
@@ -56,6 +57,7 @@ def generate_html_report(data: list, summary_date: str) -> str:
             .status-healthy {{ color: green; font-weight: bold; }}
             .status-underutilized {{ color: orange; font-weight: bold; }}
             .status-unused {{ color: red; font-weight: bold; }}
+            /* Removed row coloring styles from here, will be applied inline */
         </style>
     </head>
     <body>
@@ -97,7 +99,6 @@ def generate_html_report(data: list, summary_date: str) -> str:
 
     if not expiring_df.empty:
         html_content += "<h2>Reserved Instances Expiring Soon or Expired</h2>"
-        # --- MODIFIED: Removed specific columns from HTML output ---
         html_content += expiring_df[[
             "ri_id", "subscription_id", "sku_name", "region", "end_date", "days_remaining", "expiry_status"
         ]].to_html(index=False)
@@ -108,7 +109,6 @@ def generate_html_report(data: list, summary_date: str) -> str:
     underutilized_df = df[df['status'] == 'underutilized'].sort_values(by='utilization_percent_period')
     if not underutilized_df.empty:
         html_content += "<h2>Underutilized Reserved Instances</h2>"
-        # --- MODIFIED: Removed specific columns from HTML output ---
         html_content += underutilized_df[[
             "ri_id", "subscription_id", "sku_name", "region", "utilization_percent_period"
         ]].to_html(index=False)
@@ -119,7 +119,6 @@ def generate_html_report(data: list, summary_date: str) -> str:
     unused_df = df[df['status'] == 'unused'].sort_values(by='max_consecutive_unused_days', ascending=False)
     if not unused_df.empty:
         html_content += "<h2>Unused Reserved Instances</h2>"
-        # --- MODIFIED: Removed specific columns from HTML output ---
         html_content += unused_df[[
             "ri_id", "subscription_id", "sku_name", "region", "utilization_percent_period"
         ]].to_html(index=False)
@@ -129,12 +128,51 @@ def generate_html_report(data: list, summary_date: str) -> str:
     # --- All RIs (Detailed Table) ---
     if not df.empty:
         html_content += "<h2>Detailed Reserved Instance Report</h2>"
-        # --- MODIFIED: Removed specific columns from HTML output ---
-        html_content += df[[
+        
+        # Define the columns to display in the detailed table
+        display_columns = [
             "ri_id", "subscription_id", "sku_name", "region", "purchase_date", "end_date",
             "term_months", "utilization_percent_period", "days_remaining", "expiry_status",
             "status"
-        ]].to_html(index=False)
+        ]
+        
+        # Start building the HTML table manually to apply row coloring and borders
+        html_table = "<table><thead><tr>"
+        for col in display_columns:
+            header_name = col.replace('_', ' ').title()
+            if header_name == "Ri Id": header_name = "RI ID"
+            if header_name == "Sku Name": header_name = "SKU Name"
+            if header_name == "Term Months": header_name = "Term Months"
+            if header_name == "Utilization Percent Period": header_name = "Overall Utilization (%)"
+            if header_name == "Days Remaining": header_name = "Days Remaining"
+            if header_name == "Expiry Status": header_name = "Expiry Status"
+            # Apply inline style for border and text-align to th
+            html_table += f"<th style='border: 1px solid #ddd; padding: 8px; text-align: left;'>{header_name}</th>"
+        html_table += "</tr></thead><tbody>"
+
+        for index, row in df.iterrows():
+            status = row.get("status", "unknown")
+            row_style = ""
+            if status == "healthy":
+                row_style = "background-color: #e6ffe6;" # Light green
+            elif status == "unused":
+                row_style = "background-color: #ffe6e6;" # Light red
+            elif status == "underutilized":
+                row_style = "background-color: #fffacd;" # Light yellow
+            
+            # Apply inline style for row coloring
+            html_table += f"<tr style='{row_style}'>"
+            for col in display_columns:
+                value = row.get(col, '')
+                # Special formatting for utilization percentage
+                if col == "utilization_percent_period":
+                    value = f"{value}%" if value != 'N/A' else 'N/A'
+                # Apply inline style for border and text-align to td
+                html_table += f"<td style='border: 1px solid #ddd; padding: 8px; text-align: left;'>{value}</td>"
+            html_table += "</tr>"
+        
+        html_table += "</tbody></table>"
+        html_content += html_table
 
     html_content += """
         <p>Best regards,<br>Your FinOps Automation Team</p>
@@ -162,8 +200,7 @@ def generate_csv_report(data: list) -> io.BytesIO:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
 
-    # --- MODIFIED: Adjust fieldnames for CSV - now it's for recipient-specific data ---
-    # Removed 'email_recipient' from CSV as it's implicit for the recipient
+    # --- MODIFIED: Adjust fieldnames for CSV - removed 'alert' column ---
     fieldnames = [
         "subscription_id",
         "ri_id",
@@ -179,7 +216,7 @@ def generate_csv_report(data: list) -> io.BytesIO:
         "total_underutilized_days_period",
         "total_unused_days_period",
         "missing_days",
-        "alert",
+        # "alert", # Removed as requested
         "analysis_period_start",
         "analysis_period_end",
         "max_consecutive_underutilized_days",
@@ -211,10 +248,10 @@ def upload_blob_to_storage(filename: str, file_buffer: io.BytesIO, container_nam
         try:
             container_client.create_container()
             logger.info(f"Container '{container_name}' created (if it didn't exist).")
-        except ResourceExistsError: # Catch specific error for container already exists
+        except ResourceExistsError:
             logger.warning(f"Container '{container_name}' already exists. Skipping creation.")
         except Exception as e:
-            logger.error(f"Failed to ensure container '{container_name}' exists: {e}. Assuming it exists.")
+            logger.warning(f"Failed to ensure container '{container_name}' exists: {e}. Assuming it exists.")
 
         blob_client = container_client.get_blob_client(filename)
         blob_client.upload_blob(file_buffer.getvalue(), overwrite=True)
@@ -278,7 +315,7 @@ def generate_and_send_reports(
         # Generate HTML report for current recipient's data
         html_content = generate_html_report(data_for_recipient, summary_date)
         
-        # --- MODIFIED: Generate CSV report for each recipient's data ---
+        # Generate CSV report for each recipient's data
         recipient_csv_buffer = generate_csv_report(data_for_recipient)
         recipient_csv_filename = f"finops-ri-report-{summary_date}_{recipient.replace('@', '_at_').replace('.', '_')}.csv" # Unique filename per recipient
 
