@@ -92,37 +92,38 @@ variable "recipient_email" {
   type        = string
 }
 
-variable "smtp_host" {
-  description = "SMTP host if email_method is 'smtp'."
-  type        = string
-  default     = ""
-}
+# REMOVED: SMTP related variables are no longer needed
+# variable "smtp_host" {
+#   description = "SMTP host if email_method is 'smtp'."
+#   type        = string
+#   default     = ""
+# }
 
-variable "smtp_port" {
-  description = "SMTP port if email_method is 'smtp'."
-  type        = number
-  default     = 587
-}
+# variable "smtp_port" {
+#   description = "SMTP port if email_method is 'smtp'."
+#   type        = number
+#   default     = 587
+# }
 
-variable "smtp_user" {
-  description = "SMTP username if email_method is 'smtp'."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
+# variable "smtp_user" {
+#   description = "SMTP username if email_method is 'smtp'."
+#   type        = string
+#   default     = ""
+#   sensitive   = true
+# }
 
-variable "smtp_pass" {
-  description = "SMTP password if email_method is 'smtp'."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
+# variable "smtp_pass" {
+#   description = "SMTP password if email_method is 'smtp'."
+#   type        = string
+#   default     = ""
+#   sensitive   = true
+# }
 
-variable "smtp_sender" {
-  description = "Sender email address if email_method is 'smtp'."
-  type        = string
-  default     = "no-reply@example.com"
-}
+# variable "smtp_sender" {
+#   description = "Sender email address if email_method is 'smtp'."
+#   type        = string
+#   default     = "no-reply@example.com"
+# }
 
 variable "logicapp_endpoint" {
   description = "HTTP POST endpoint for Azure Logic App for email notifications if email_method is 'logicapp'."

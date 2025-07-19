@@ -105,18 +105,18 @@ resource "azurerm_linux_function_app" "main" {
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
     "APPINSIGHTS_INSTRUMENTATIONKEY"      = azurerm_application_insights.main.instrumentation_key
 
-    # Direct DB connection string - NO LONGER using Key Vault secret for this
+    # Direct DB connection string
     "DATABASE_CONNECTION_STRING" = "Host=${azurerm_postgresql_flexible_server.main.name}.postgres.database.azure.com;Database=${azurerm_postgresql_flexible_server_database.main.name};Username=${var.postgresql_admin_username};Password=${var.postgresql_admin_password};SslMode=Require;"
 
     "EMAIL_METHOD" = var.email_method
-    # Direct SMTP settings - NO LONGER using Key Vault secrets for these
-    "SMTP_HOST"   = var.email_method == "smtp" ? var.smtp_host : null
-    "SMTP_PORT"   = var.smtp_port
-    "SMTP_USER"   = var.email_method == "smtp" ? var.smtp_user : null
-    "SMTP_PASS"   = var.email_method == "smtp" ? var.smtp_pass : null
-    "SMTP_SENDER" = var.smtp_sender
+    # REMOVED: SMTP settings are no longer needed as per code changes
+    # "SMTP_HOST"   = var.email_method == "smtp" ? var.smtp_host : null
+    # "SMTP_PORT"   = var.smtp_port
+    # "SMTP_USER"   = var.email_method == "smtp" ? var.smtp_user : null
+    # "SMTP_PASS"   = var.email_method == "smtp" ? var.smtp_pass : null
+    # "SMTP_SENDER" = var.smtp_sender # This variable is still used for Logic App sender, keep it if needed there
 
-    # Direct Logic App endpoint - NO LONGER using Key Vault secret for this
+    # Direct Logic App endpoint
     "LOGICAPP_ENDPOINT" = var.email_method == "logicapp" ? var.logicapp_endpoint : null
 
     "MIN_UTILIZATION_THRESHOLD"    = var.min_utilization_threshold
@@ -148,7 +148,6 @@ resource "azurerm_postgresql_flexible_server" "main" {
 
   backup_retention_days        = 7
   geo_redundant_backup_enabled = false
-  # 'zone' 属性已移除，让 Azure 在重新创建时自动选择可用区，避免之前的手动指定问题
   tags = local.common_tags
 }
 
@@ -160,56 +159,10 @@ resource "azurerm_postgresql_flexible_server_database" "main" {
 }
 
 # Null resource to create the 'ri_usage' table in PostgreSQL
-# Keeping this commented out as you stated you prefer to manage tables manually for now.
-# If you wish Terraform to create this table, uncomment and ensure the python script is available.
 resource "null_resource" "create_ri_usage_table" {
   depends_on = [azurerm_postgresql_flexible_server_database.main]
-
-  /*
-  provisioner "local-exec" {
-    command = <<-EOT
-      python3 -c '
-import os
-import sys
-import psycopg2
-
-DB_CONN_STRING = os.environ.get("TF_VAR_DB_CONN_STRING")
-
-def create_table(db_conn_string):
-    conn = None
-    try:
-        conn = psycopg2.connect(db_conn_string)
-        cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ri_usage (
-            subscription_id TEXT NOT NULL,
-            resource_id TEXT NOT NULL,
-            usage_quantity REAL,
-            usage_start TEXT NOT NULL,
-            email_recipient TEXT,
-            PRIMARY KEY (subscription_id, resource_id, usage_start)
-        );
-        """)
-        conn.commit()
-        cursor.close()
-        print("ri_usage table created or already exists successfully.")
-    except Exception as e:
-        print(f"Error creating ri_usage table: {e}", file=sys.stderr)
-        sys.exit(1)
-
-if __name__ == "__main__":
-    if not DB_CONN_STRING:
-        print("TF_VAR_DB_CONN_STRING environment variable is not set. Cannot create table.", file=sys.stderr)
-        sys.exit(1)
-    create_table(DB_CONN_STRING)
-      '
-    EOT
-
-    environment = {
-      TF_VAR_DB_CONN_STRING = "postgresql://${var.postgresql_admin_username}:${var.postgresql_admin_password}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${azurerm_postgresql_flexible_server_database.main.name}?sslmode=require"
-    }
-  }
-  */
+  # This resource is commented out as you prefer to manage tables manually for now.
+  # If you wish Terraform to create this table, uncomment the provisioner block.
 }
 
 # PostgreSQL Firewall Rule
@@ -253,16 +206,9 @@ resource "azurerm_key_vault" "main" {
 
 data "azurerm_client_config" "current" {}
 
-# REMOVED: azurerm_key_vault_secret.db_conn_string
-# REMOVED: azurerm_key_vault_secret.smtp_host_secret
-# REMOVED: azurerm_key_vault_secret.smtp_user_secret
-# REMOVED: azurerm_key_vault_secret.smtp_pass_secret
-# REMOVED: azurerm_key_vault_secret.logicapp_endpoint_secret
-
-# Assign Managed Identity permissions (removed KV access role, as no secrets are being read by func app)
+# Assign Managed Identity permissions (removed KV access role, as no secrets are being read by func app for DB/email)
 # If Key Vault is still intended for other secrets read by the Function App,
 # you might need to re-add 'azurerm_role_assignment.func_app_kv_access' after confirming.
-# For now, it's removed since the DB/email secrets are direct app settings.
 /*
 resource "azurerm_role_assignment" "func_app_kv_access" {
   scope                = azurerm_key_vault.main.id

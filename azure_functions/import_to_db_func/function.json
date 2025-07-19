@@ -1,0 +1,19 @@
+{
+  "scriptFile": "__init__.py",
+  "bindings": [
+    {
+      "name": "inputBlob",
+      "type": "blobTrigger",
+      "direction": "in",
+      "path": "ri-usage-raw/{name}", 
+      "connection": "AzureWebJobsStorage" 
+    },
+    {
+      "name": "outputQueue",
+      "type": "queue",
+      "direction": "out",
+      "queueName": "finops-ri-analysis-queue", 
+      "connection": "AzureWebJobsStorage"
+    }
+  ]
+}

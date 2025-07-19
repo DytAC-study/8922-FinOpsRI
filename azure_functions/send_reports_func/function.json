@@ -1,0 +1,12 @@
+{
+  "scriptFile": "__init__.py",
+  "bindings": [
+    {
+      "name": "inputblob",
+      "type": "blobTrigger",
+      "direction": "in",
+      "path": "ri-analysis-output/{name}",
+      "connection": "AzureWebJobsStorage"
+    }
+  ]
+}

@@ -1,94 +1,102 @@
-# query_azure_ri_data.py – Extract flat RI utilization summary from Azure usage and tags
+# query_azure_ri_data.py – Generate daily mock RI utilization data for local testing
 
 import os
 import json
 from datetime import datetime, timedelta
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.subscription import SubscriptionClient
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.consumption import ConsumptionManagementClient
 from dotenv import load_dotenv
 from pathlib import Path
+import random
 
 load_dotenv()
 
 OUTPUT_DIR = "data"
-DEFAULT_TERM_MONTHS = 12
-DAYS_BEFORE_TODAY = 180
+Path(OUTPUT_DIR).mkdir(exist_ok=True)
 
-def fetch_subscriptions():
-    credential = DefaultAzureCredential()
-    client = SubscriptionClient(credential)
-    return [sub.subscription_id for sub in client.subscriptions.list()]
+# --- Configuration from environment variables (consistent with Azure Functions) ---
+# These are used for generating mock data properties
+DEFAULT_TERM_MONTHS = int(os.getenv("DEFAULT_TERM_MONTHS", "12"))
+# MOCK_PURCHASE_DATE_OFFSET_DAYS: Used to set a mock purchase date for RIs.
+# This ensures a plausible purchase date for the mock RIs.
+MOCK_PURCHASE_DATE_OFFSET_DAYS = int(os.getenv("MOCK_PURCHASE_DATE_OFFSET_DAYS", "180")) # e.g., purchase 180 days ago
+# ANALYSIS_PERIOD_DAYS: Number of days for which to generate mock daily data.
+# This should align with the ANALYSIS_PERIOD_DAYS in analyze_ri_utilization.py.
+ANALYSIS_PERIOD_DAYS = int(os.getenv("ANALYSIS_PERIOD_DAYS", "30")) 
+DEFAULT_REGION = os.getenv("DEFAULT_REGION", "eastus")
+DEFAULT_SKU = os.getenv("DEFAULT_SKU", "Standard_DS1_v2")
 
-def fetch_tagged_emails(subscription_id):
-    credential = DefaultAzureCredential()
-    client = ResourceManagementClient(credential, subscription_id)
-    resources = client.resources.list(filter="tagName eq 'email'")
-    email_map = {}
-    for res in resources:
-        email = res.tags.get("email") if res.tags else None
-        if email:
-            email_map[res.id.lower()] = email
-    return email_map
+# Mock RIs and their associated emails
+MOCK_RIS = [
+    {"id": "ri-mock-001", "sku": "Standard_D2_v3", "region": "eastus", "email": "devteam@example.com"},
+    {"id": "ri-mock-002", "sku": "Standard_E4_v3", "region": "westus", "email": "finops@example.com"},
+    {"id": "ri-mock-003", "sku": "Standard_B2s", "region": "centralus", "email": "devteam@example.com"},
+    {"id": "ri-mock-004", "sku": "Standard_D4_v3", "region": "eastus", "email": "finops@example.com"},
+    {"id": "ri-mock-005", "sku": "Standard_B4ms", "region": "westus", "email": "devteam@example.com"},
+]
 
-def fetch_usage_details(subscription_id):
-    credential = DefaultAzureCredential()
-    client = ConsumptionManagementClient(credential, subscription_id)
-    end_date = datetime.utcnow().date()
-    start_date = end_date - timedelta(days=7)  # 最近 7 天平均
-    usage = client.usage_details.list(
-        expand="properties/meterDetails",
-        start_date=start_date.isoformat(),
-        end_date=end_date.isoformat()
-    )
-    usage_map = {}
-    for item in usage:
-        props = item.additional_properties.get("properties", {})
-        resource_id = props.get("instanceId", "").lower()
-        quantity = props.get("quantity", 0)
-        meter = props.get("meterDetails", {})
-        usage_map.setdefault(resource_id, []).append({
-            "quantity": quantity,
-            "region": meter.get("meterRegion", "eastus"),
-            "sku": meter.get("meterName", "Standard_DS1_v2")
-        })
-    return usage_map
+MOCK_SUBSCRIPTIONS = ["sub-mock-a", "sub-mock-b"]
+
+def generate_mock_daily_utilization(ri_id, start_date, end_date):
+    """Generates mock daily utilization data for a single RI over a date range."""
+    daily_data = []
+    current_date = start_date
+    while current_date <= end_date:
+        # Simulate varying utilization: mostly healthy, some underutilized, some unused
+        util_percent = random.choice([
+            random.uniform(85, 100), # Healthy utilization
+            random.uniform(20, 79),  # Underutilized
+            0.0,                     # Unused
+            random.uniform(85, 100), # Healthy
+            random.uniform(85, 100)  # Healthy
+        ])
+        daily_data.append(round(util_percent, 2))
+        current_date += timedelta(days=1)
+    return daily_data
 
 def main():
-    Path(OUTPUT_DIR).mkdir(exist_ok=True)
     today = datetime.utcnow().date()
-    file_path = os.path.join(OUTPUT_DIR, f"azure_ri_usage_summary_{today.isoformat()}.json")
+    
+    # Define the period for which to generate daily data
+    # This aligns with how Azure Function's analyze_ri_utilization.py expects data
+    # Generate data up to yesterday to simulate daily data collection
+    analysis_end_date = today - timedelta(days=1) 
+    analysis_start_date = analysis_end_date - timedelta(days=ANALYSIS_PERIOD_DAYS - 1)
 
-    all_flat_records = []
+    all_daily_records = []
 
-    subscriptions = fetch_subscriptions()
-    print(f"[🔎] Found {len(subscriptions)} subscription(s)")
+    for sub_id in MOCK_SUBSCRIPTIONS:
+        for mock_ri in MOCK_RIS:
+            ri_id = mock_ri["id"]
+            sku_name = mock_ri["sku"]
+            region = mock_ri["region"]
+            email_recipient = mock_ri["email"]
 
-    for sub_id in subscriptions:
-        print(f"[📦] Processing subscription: {sub_id}")
-        email_tags = fetch_tagged_emails(sub_id)
-        usage = fetch_usage_details(sub_id)
+            # Mock purchase date for this RI (consistent for its lifetime)
+            # Ensure purchase_date is before analysis_start_date for realistic scenarios
+            mock_purchase_date = analysis_start_date - timedelta(days=MOCK_PURCHASE_DATE_OFFSET_DAYS)
+            
+            daily_util_data = generate_mock_daily_utilization(ri_id, analysis_start_date, analysis_end_date)
+            
+            current_date_for_record = analysis_start_date
+            for util_qty in daily_util_data:
+                record = {
+                    "subscription_id": sub_id,
+                    "resource_id": ri_id,
+                    "usage_quantity": util_qty,
+                    "report_date": current_date_for_record.strftime("%Y-%m-%d"), # Daily report date
+                    "email_recipient": email_recipient,
+                    "sku_name": sku_name,
+                    "region": region,
+                    "term_months": DEFAULT_TERM_MONTHS, # Use default term months
+                    "purchase_date": mock_purchase_date.strftime("%Y-%m-%d") # Consistent purchase date for this RI
+                }
+                all_daily_records.append(record)
+                current_date_for_record += timedelta(days=1)
 
-        for resource_id, daily_records in usage.items():
-            avg_util = sum([r["quantity"] for r in daily_records]) / len(daily_records)
-            sample = daily_records[-1]  # Get region + sku from last record
-
-            flat_record = {
-                "subscription_id": sub_id,
-                "ri_id": resource_id,
-                "sku_name": sample.get("sku"),
-                "region": sample.get("region"),
-                "purchase_date": (today - timedelta(days=DAYS_BEFORE_TODAY)).isoformat(),
-                "term_months": DEFAULT_TERM_MONTHS,
-                "utilization_percent": round(avg_util, 2),
-                "email_recipient": email_tags.get(resource_id, "noreply@example.com")
-            }
-            all_flat_records.append(flat_record)
-
-    with open(file_path, "w") as f:
-        json.dump(all_flat_records, f, indent=2)
-    print(f"[✅] Data saved to {file_path}")
+    # Save the generated daily data to a JSON file
+    file_path = os.path.join(OUTPUT_DIR, f"azure_ri_usage_daily_summary_{today.strftime('%Y-%m-%d')}.json")
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(all_daily_records, f, indent=2)
+    print(f"[✅] Daily mock RI utilization data saved to {file_path}")
 
 if __name__ == "__main__":
     main()
