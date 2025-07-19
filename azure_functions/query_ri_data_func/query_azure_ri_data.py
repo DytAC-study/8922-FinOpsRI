@@ -5,11 +5,11 @@ from azure.identity import DefaultAzureCredential
 from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.consumption import ConsumptionManagementClient
+import logging
 
-# Removed: from dotenv import load_dotenv (Azure Functions handle environment variables)
-# Removed: OUTPUT_DIR = "data" (Output is now to Blob Storage via __init__.py)
+logger = logging.getLogger(__name__)
 
-# Default values for placeholder data
+# Default values for placeholder data (these are mostly for local mock data, but kept for completeness)
 DEFAULT_TERM_MONTHS = 12
 DAYS_BEFORE_TODAY = 180 # Used for example purchase date calculation
 
@@ -30,58 +30,63 @@ def fetch_tagged_emails(subscription_id):
     """
     credential = DefaultAzureCredential()
     client = ResourceManagementClient(credential, subscription_id)
-    # Filter resources by 'email' tag presence
     resources = client.resources.list(filter="tagName eq 'email'")
     email_map = {}
     for res in resources:
         email = res.tags.get("email") if res.tags else None
         if email:
-            # Store resource ID (lowercase for consistency) and associated email
             email_map[res.id.lower()] = email
     return email_map
 
-def fetch_usage_details(subscription_id):
+def fetch_usage_details(subscription_id, target_date: date):
     """
-    Fetches Azure consumption usage details for the last 7 days.
+    Fetches Azure consumption usage details for a specific target date.
     Filters for Reserved Instance usage.
+    Returns a list of daily records.
     """
     credential = DefaultAzureCredential()
     client = ConsumptionManagementClient(credential, subscription_id)
-    end_date = datetime.utcnow().date()
-    start_date = end_date - timedelta(days=7) # Fetch data for the last 7 days
+    
+    # Query for the specific target_date
+    start_date_str = target_date.isoformat()
+    # End date is the next day, exclusive, to cover the whole target_date
+    end_date_str = (target_date + timedelta(days=1)).isoformat() 
 
-    usage_map = {}
-    # Query usage details, filtering by 'Reservation' usage type (adjust as needed)
-    # The 'properties' of usage details can vary; adapt access based on actual API response.
-    # Note: 'metric' and 'resourceGroup' are examples; check actual JSON output from Consumption API.
+    daily_records_list = []
     try:
         # Use a generator for potentially large results
+        # Filter for Reservation usage if applicable, or process all and filter later
         for usage in client.usage_details.list(
             scope=f"/subscriptions/{subscription_id}",
-            expand="meterDetails,additionalInfo", # Expand for more details like RI name, SKU
-            filter=f"properties/usageStart ge '{start_date.isoformat()}' and properties/usageEnd le '{end_date.isoformat()}'",
-            metric="ActualCost" # Or 'AmortizedCost' depending on your reporting needs
+            expand="meterDetails,additionalInfo",
+            filter=f"properties/usageStart ge '{start_date_str}' and properties/usageEnd lt '{end_date_str}'", # Use lt for end_date to get only target_date
+            metric="ActualCost" # Or 'AmortizedCost'
         ):
-            # Extract relevant info. Adapt these paths based on actual usage detail object structure.
             ri_id = usage.properties.get("instanceId", usage.properties.get("resourceId", "unknown_ri"))
-            quantity = usage.properties.get("quantity", 0) # e.g., hours used
-            usage_date = usage.properties.get("usageStart", datetime.utcnow().isoformat())
+            quantity = usage.properties.get("quantity", 0)
+            # Ensure usage_date is the actual report date for the record
+            usage_date_str = usage.properties.get("usageStart", target_date.isoformat())
             sku = usage.properties.get("meterDetails", {}).get("meterName", "unknown_sku")
             region = usage.properties.get("resourceLocation", "unknown_region")
+            
+            # Placeholder for term_months and purchase_date for real data
+            # In a real scenario, these would come from Reservation APIs or tags
+            term_months = DEFAULT_TERM_MONTHS # Placeholder
+            purchase_date = (target_date - timedelta(days=DAYS_BEFORE_TODAY)).isoformat() # Placeholder
 
-            if ri_id not in usage_map:
-                usage_map[ri_id] = []
-
-            usage_map[ri_id].append({
-                "date": datetime.fromisoformat(usage_date.replace('Z', '+00:00')).date(), # Convert to date object
-                "quantity": quantity,
-                "sku": sku,
-                "region": region
+            daily_records_list.append({
+                "subscription_id": subscription_id,
+                "resource_id": ri_id,
+                "usage_quantity": quantity,
+                "report_date": datetime.fromisoformat(usage_date_str.replace('Z', '+00:00')).date().isoformat(), # Ensure it's just the date
+                "sku_name": sku,
+                "region": region,
+                "term_months": term_months,
+                "purchase_date": purchase_date # This will be the same for all daily records from this fetch
             })
     except Exception as e:
-        print(f"[❌] Error fetching usage details for subscription {subscription_id}: {e}")
-        # Depending on criticality, you might re-raise or return empty.
-        # For a function, it's often better to raise to ensure the pipeline stops on critical errors.
+        logger.error(f"[❌] Error fetching usage details for subscription {subscription_id} on {target_date}: {e}", exc_info=True)
         raise
 
-    return usage_map
+    return daily_records_list
+
